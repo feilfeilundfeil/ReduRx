@@ -14,6 +14,8 @@ abstract class ActionType {}
 abstract class Action<T> implements ActionType {
   /// Method to perform a synchronous mutation on the state.
   T reduce(T state);
+  /// Method to perform logic after the action was reduced.
+  void afterReduce(Store<T> store, T state) {}
 }
 
 /// Reducer function type for state mutations.
@@ -21,17 +23,22 @@ typedef T Computation<T>(T state);
 
 /// Action for asynchronous requests.
 abstract class AsyncAction<T> implements ActionType {
+
+  /// Method to check if an AsyncAction should be reduced.
+  bool shouldReduce(Store<T> store, T state) => true;
   /// Method to perform a asynchronous mutation on the state.
   Future<Computation<T>> reduce(T state);
+  /// Method to perform logic after the asyncAction was reduced.
+  void afterReduce(Store<T> store, T state) {}
 }
 
 /// Interface for Middlewares.
 abstract class Middleware<T> {
   /// Called before action reducer.
-  T beforeAction(Store<T> store, ActionType action, T state) => state;
+  void beforeAction(Store<T> store, ActionType action, T state) {}
 
   /// Called after action reducer.
-  T afterAction(Store<T> store, ActionType action, T state) => state;
+  void afterAction(Store<T> store, ActionType action, T state) {}
 }
 
 /// The heart of the idea, this is where we control the State and dispatch Actions.
@@ -58,24 +65,23 @@ class Store<T> {
   /// Dispatches actions that mutates the current state.
   Store<T> dispatch(ActionType action) {
     if (action is Action<T>) {
-      final afterAction =
-          action.reduce(_computeBeforeMiddlewares(action, state));
-      final afterMiddlewares = _foldAfterActionMiddlewares(afterAction, action);
-      subject.add(afterMiddlewares);
+      _beforeMiddleware(action, state);
+      final newState = action.reduce(state);
+      subject.add(newState);
+      _afterMiddleware(action, state);
+      action.afterReduce(this, state);
     }
-
     if (action is AsyncAction<T>) {
-      action
-          .reduce(_computeBeforeMiddlewares(action, state))
-          .then((computation) {
-        final afterAction =
-            computation(_computeBeforeMiddlewares(action, state));
-        final afterMiddlewares =
-            _foldAfterActionMiddlewares(afterAction, action);
-        subject.add(afterMiddlewares);
-      });
+      _beforeMiddleware(action, state);
+      if (action.shouldReduce(this, state)) {
+        action.reduce(state).then((computation) {
+          final newState = computation(state);
+          subject.add(newState);
+          _afterMiddleware(action, state);
+          action.afterReduce(this, state);
+        });
+      }
     }
-
     return this;
   }
 
@@ -88,11 +94,15 @@ class Store<T> {
   /// Closes the stores subject.
   void close() => subject.close();
 
-  T _computeBeforeMiddlewares(ActionType action, T state) =>
-      middlewares.fold<T>(state,
-          (state, middleware) => middleware.beforeAction(this, action, state));
+  void _beforeMiddleware(ActionType action, T state) {
+    for (var middleware in middlewares) {
+      middleware.beforeAction(this, action, state);
+    }
+  }
 
-  T _foldAfterActionMiddlewares(T initialValue, ActionType action) =>
-      middlewares.fold<T>(initialValue,
-          (state, middleware) => middleware.afterAction(this, action, state));
+  void _afterMiddleware(ActionType action, T state) {
+    for (var middleware in middlewares) {
+      middleware.afterAction(this, action, state);
+    }
+  }
 }

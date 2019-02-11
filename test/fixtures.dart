@@ -25,17 +25,3 @@ class AsyncIncrement extends AsyncAction<State> {
     return (State state) => State(state.count + 1);
   }
 }
-
-class BeforeActionMiddleware extends Middleware<State> {
-  @override
-  State beforeAction(Store<State> store, ActionType action, State state) {
-    return State(state.count + 2);
-  }
-}
-
-class AfterActionMiddleware extends Middleware<State> {
-  @override
-  State afterAction(Store<State> store, ActionType action, State state) {
-    return State(state.count - 2);
-  }
-}
