@@ -1,5 +1,5 @@
 # 1.2.0
-* **Breaking** Middlewares does not modifie the state
+* **Breaking** Middleware does not modify the state
 * Action and AsyncAction can override afterReducer Method that has access to the store
 * AsyncAction can override shouldReduce, to decide if reduced has to be called
 
