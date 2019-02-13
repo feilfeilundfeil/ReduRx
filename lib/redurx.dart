@@ -12,6 +12,7 @@ abstract class ActionType {}
 
 /// Action for synchronous requests.
 abstract class Action<T> implements ActionType {
+
   /// Method to perform a synchronous mutation on the state.
   T reduce(T state);
   /// Method to perform logic after the action was reduced.
@@ -24,12 +25,12 @@ typedef T Computation<T>(T state);
 /// Action for asynchronous requests.
 abstract class AsyncAction<T> implements ActionType {
 
-  /// Method to check if an AsyncAction should be reduced.
-  bool shouldReduce(Store<T> store, T state) => true;
   /// Method to perform a asynchronous mutation on the state.
   Future<Computation<T>> reduce(T state);
   /// Method to perform logic after the asyncAction was reduced.
   void afterReduce(Store<T> store, T state) {}
+  /// A pre computation reduce, useful for loading states.
+  T reduceSync(T state) => state;
 }
 
 /// Interface for Middlewares.
@@ -73,14 +74,13 @@ class Store<T> {
     }
     if (action is AsyncAction<T>) {
       _beforeMiddleware(action, state);
-      if (action.shouldReduce(this, state)) {
-        action.reduce(state).then((computation) {
-          final newState = computation(state);
-          subject.add(newState);
-          _afterMiddleware(action, state);
-          action.afterReduce(this, state);
-        });
-      }
+      action.reduce(state).then((computation) {
+        final newState = computation(state);
+        subject.add(newState);
+        _afterMiddleware(action, state);
+        action.afterReduce(this, state);
+      });
+      subject.add(action.reduceSync(state));
     }
     return this;
   }
